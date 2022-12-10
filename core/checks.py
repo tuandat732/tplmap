@@ -1,7 +1,6 @@
 from plugins.engines.mako import Mako
 from plugins.engines.jinja2 import Jinja2
 from plugins.engines.smarty import Smarty
-from plugins.engines.twig import Twig
 from plugins.engines.freemarker import Freemarker
 from plugins.engines.velocity import Velocity
 from plugins.engines.pug import Pug
@@ -38,7 +37,6 @@ plugins = [
     Python,
     Tornado,
     Jinja2,
-    Twig,
     Freemarker,
     Velocity,
     Slim,
